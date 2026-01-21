@@ -6,7 +6,9 @@ const { listen } = window.__TAURI__.event;
 let dropZone;
 let browseBtn;
 let statusArea;
-let statusText;
+let statusHeaderText;
+let statusCount;
+let statusList;
 let progressContainer;
 let progressBar;
 let ffmpegModal;
@@ -16,17 +18,22 @@ let manualInstructions;
 let retryBtn;
 let installingModal;
 let installStatus;
-let installProgressBar;
 
 // State
-let pendingFile = null;
+let pendingFiles = [];
+let conversionQueue = [];
+let completedCount = 0;
+let errorCount = 0;
+let isConverting = false;
 
 window.addEventListener("DOMContentLoaded", () => {
   // Get DOM elements
   dropZone = document.getElementById("drop-zone");
   browseBtn = document.getElementById("browse-btn");
   statusArea = document.getElementById("status-area");
-  statusText = document.getElementById("status-text");
+  statusHeaderText = document.getElementById("status-header-text");
+  statusCount = document.getElementById("status-count");
+  statusList = document.getElementById("status-list");
   progressContainer = document.getElementById("progress-container");
   progressBar = document.getElementById("progress-bar");
   ffmpegModal = document.getElementById("ffmpeg-modal");
@@ -36,19 +43,15 @@ window.addEventListener("DOMContentLoaded", () => {
   retryBtn = document.getElementById("retry-btn");
   installingModal = document.getElementById("installing-modal");
   installStatus = document.getElementById("install-status");
-  installProgressBar = document.getElementById("install-progress-bar");
 
   // Setup event listeners
   setupDragAndDrop();
   setupBrowseButton();
   setupModalButtons();
-  
-  // Listen for Tauri events
   setupTauriListeners();
 });
 
 function setupDragAndDrop() {
-  // Prevent default drag behaviors on window
   ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
     window.addEventListener(eventName, (e) => {
       e.preventDefault();
@@ -56,7 +59,6 @@ function setupDragAndDrop() {
     });
   });
 
-  // Highlight drop zone when dragging over
   ["dragenter", "dragover"].forEach((eventName) => {
     dropZone.addEventListener(eventName, () => {
       dropZone.classList.add("drag-over");
@@ -69,19 +71,6 @@ function setupDragAndDrop() {
     });
   });
 
-  // Handle drop
-  dropZone.addEventListener("drop", async (e) => {
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      // Get the file path from the dropped file
-      const file = files[0];
-      // In Tauri, we need to get the path differently
-      // The file object doesn't have a path property in the browser
-      // We need to use the Tauri drag-drop event instead
-    }
-  });
-
-  // Click on drop zone to browse
   dropZone.addEventListener("click", (e) => {
     if (e.target !== browseBtn) {
       browseBtn.click();
@@ -95,7 +84,7 @@ function setupBrowseButton() {
     
     try {
       const selected = await open({
-        multiple: false,
+        multiple: true,
         filters: [{
           name: "Video Files",
           extensions: ["mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "mpeg", "mpg", "3gp"]
@@ -103,7 +92,10 @@ function setupBrowseButton() {
       });
       
       if (selected) {
-        handleFile(selected);
+        const files = Array.isArray(selected) ? selected : [selected];
+        if (files.length > 0) {
+          handleFiles(files);
+        }
       }
     } catch (err) {
       console.error("Error opening file dialog:", err);
@@ -119,15 +111,13 @@ function setupModalButtons() {
     try {
       await invoke("install_ffmpeg");
       installingModal.classList.add("hidden");
-      showStatus("ffmpeg installed successfully!", "success");
       
-      // Retry conversion if there was a pending file
-      if (pendingFile) {
-        await handleFile(pendingFile);
+      if (pendingFiles.length > 0) {
+        await handleFiles(pendingFiles);
       }
     } catch (err) {
       installingModal.classList.add("hidden");
-      showStatus(`Failed to install ffmpeg: ${err}`, "error");
+      showError(`install failed: ${err}`);
     }
   });
 
@@ -143,71 +133,133 @@ function setupModalButtons() {
     manualInstallBtn.classList.remove("hidden");
     installFfmpegBtn.classList.remove("hidden");
     
-    if (pendingFile) {
-      await handleFile(pendingFile);
+    if (pendingFiles.length > 0) {
+      await handleFiles(pendingFiles);
     }
   });
 }
 
 function setupTauriListeners() {
-  // Listen for file drop events from Tauri
   listen("tauri://drag-drop", (event) => {
     const paths = event.payload.paths;
     if (paths && paths.length > 0) {
-      handleFile(paths[0]);
+      handleFiles(paths);
     }
   });
 }
 
-async function handleFile(filePath) {
-  pendingFile = filePath;
+async function handleFiles(filePaths) {
+  pendingFiles = filePaths;
+  
+  // Check if ffmpeg is available
+  const hasFfmpeg = await invoke("check_ffmpeg");
+  
+  if (!hasFfmpeg) {
+    ffmpegModal.classList.remove("hidden");
+    return;
+  }
+  
+  // Reset state
+  conversionQueue = filePaths.map(path => ({
+    path,
+    filename: path.split(/[/\\]/).pop(),
+    status: 'pending',
+    output: null,
+    error: null
+  }));
+  completedCount = 0;
+  errorCount = 0;
+  isConverting = true;
   
   // Show status area
   statusArea.classList.remove("hidden");
   progressContainer.classList.remove("hidden");
-  progressBar.style.width = "0%";
+  updateStatusUI();
   
-  // Get filename for display
-  const filename = filePath.split(/[/\\]/).pop();
-  showStatus(`Converting: ${filename}...`);
-  
-  try {
-    // Check if ffmpeg is available
-    const hasFfmpeg = await invoke("check_ffmpeg");
+  // Process files sequentially
+  for (let i = 0; i < conversionQueue.length; i++) {
+    const item = conversionQueue[i];
+    item.status = 'converting';
+    updateStatusUI();
     
-    if (!hasFfmpeg) {
-      progressContainer.classList.add("hidden");
-      ffmpegModal.classList.remove("hidden");
-      showStatus("ffmpeg not found", "error");
-      return;
+    try {
+      const outputPath = await invoke("convert_file", { inputPath: item.path });
+      item.status = 'done';
+      item.output = outputPath.split(/[/\\]/).pop();
+      completedCount++;
+    } catch (err) {
+      item.status = 'error';
+      item.error = err;
+      errorCount++;
     }
     
-    // Start conversion
-    progressBar.style.width = "10%";
-    const outputPath = await invoke("convert_file", { inputPath: filePath });
-    
-    progressBar.style.width = "100%";
-    const outputFilename = outputPath.split(/[/\\]/).pop();
-    showStatus(`Done! Saved as: ${outputFilename}`, "success");
-    pendingFile = null;
-    
-    // Reset progress after a delay
-    setTimeout(() => {
-      progressContainer.classList.add("hidden");
-      progressBar.style.width = "0%";
-    }, 3000);
-    
-  } catch (err) {
-    progressContainer.classList.add("hidden");
-    showStatus(`Error: ${err}`, "error");
+    updateStatusUI();
+    updateProgress((i + 1) / conversionQueue.length);
   }
+  
+  isConverting = false;
+  pendingFiles = [];
+  updateStatusUI();
+  
+  // Hide progress after delay
+  setTimeout(() => {
+    progressContainer.classList.add("hidden");
+    progressBar.style.width = "0%";
+  }, 2000);
 }
 
-function showStatus(message, type = "") {
-  statusText.textContent = message;
-  statusText.className = "status-text";
-  if (type) {
-    statusText.classList.add(type);
+function updateStatusUI() {
+  const total = conversionQueue.length;
+  const done = completedCount + errorCount;
+  
+  if (isConverting) {
+    statusHeaderText.textContent = "converting";
+  } else if (errorCount > 0 && completedCount > 0) {
+    statusHeaderText.textContent = "completed with errors";
+  } else if (errorCount > 0) {
+    statusHeaderText.textContent = "failed";
+  } else {
+    statusHeaderText.textContent = "done";
   }
+  
+  statusCount.textContent = `${done}/${total}`;
+  
+  // Build status list
+  statusList.innerHTML = conversionQueue.map(item => {
+    let stateText = '';
+    let stateClass = '';
+    
+    switch (item.status) {
+      case 'pending':
+        stateText = 'waiting';
+        break;
+      case 'converting':
+        stateText = 'converting...';
+        break;
+      case 'done':
+        stateText = '→ ' + item.output;
+        stateClass = 'done';
+        break;
+      case 'error':
+        stateText = 'failed';
+        stateClass = 'error';
+        break;
+    }
+    
+    return `
+      <div class="status-item">
+        <span class="filename">${item.filename}</span>
+        <span class="state ${stateClass}">${stateText}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function updateProgress(ratio) {
+  progressBar.style.width = `${Math.round(ratio * 100)}%`;
+}
+
+function showError(message) {
   statusArea.classList.remove("hidden");
+  statusList.innerHTML = `<div class="status-item"><span class="state error">${message}</span></div>`;
 }

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MKV to MP4 Converter</title>
+    <title>mkv2mp4</title>
     <script type="module" src="/main.js" defer></script>
   </head>
 
@@ -13,45 +13,47 @@
       <!-- Main drop zone -->
       <div id="drop-zone" class="drop-zone">
         <div class="drop-zone-content">
-          <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
             <polyline points="17 8 12 3 7 8"/>
             <line x1="12" y1="3" x2="12" y2="15"/>
           </svg>
-          <p class="drop-text">Drop video file here</p>
+          <p class="drop-text">drop video files here</p>
           <p class="drop-subtext">or</p>
-          <button id="browse-btn" class="browse-btn">Browse Files</button>
-          <p class="supported-formats">Supports MKV, AVI, MOV, and other formats</p>
+          <button id="browse-btn" class="browse-btn">browse</button>
+          <p class="supported-formats">mkv, avi, mov, wmv, flv, webm, m4v</p>
         </div>
       </div>
 
       <!-- Status area -->
       <div id="status-area" class="status-area hidden">
-        <div id="status-content">
-          <p id="status-text" class="status-text"></p>
-          <div id="progress-container" class="progress-container hidden">
-            <div id="progress-bar" class="progress-bar"></div>
-          </div>
+        <div class="status-header">
+          <span id="status-header-text">converting</span>
+          <span id="status-count"></span>
+        </div>
+        <div id="status-list" class="status-list"></div>
+        <div id="progress-container" class="progress-container hidden">
+          <div id="progress-bar" class="progress-bar"></div>
         </div>
       </div>
 
       <!-- ffmpeg missing modal -->
       <div id="ffmpeg-modal" class="modal hidden">
         <div class="modal-content">
-          <h2>Missing Dependency</h2>
-          <p>Hey! You're missing <strong>ffmpeg</strong>, which is needed for this app to work.</p>
-          <p class="modal-subtext">ffmpeg is a free tool that handles video conversion. Don't worry, we can help!</p>
+          <h2>missing dependency</h2>
+          <p>ffmpeg is required but not installed.</p>
+          <p class="modal-subtext">ffmpeg is a free tool that handles video conversion.</p>
           <div class="modal-buttons">
-            <button id="install-ffmpeg-btn" class="btn-primary">Install it for me</button>
-            <button id="manual-install-btn" class="btn-secondary">I'll do it myself</button>
+            <button id="install-ffmpeg-btn" class="btn-primary">install for me</button>
+            <button id="manual-install-btn" class="btn-secondary">do it myself</button>
           </div>
           <div id="manual-instructions" class="manual-instructions hidden">
-            <p><strong>Manual installation:</strong></p>
+            <p><strong>manual install:</strong></p>
             <ul>
-              <li><strong>Mac:</strong> Open Terminal and run: <code>brew install ffmpeg</code></li>
-              <li><strong>Windows:</strong> Download from <a href="https://ffmpeg.org/download.html" target="_blank">ffmpeg.org</a></li>
+              <li><strong>mac:</strong> <code>brew install ffmpeg</code></li>
+              <li><strong>win:</strong> <a href="https://ffmpeg.org/download.html" target="_blank">ffmpeg.org</a></li>
             </ul>
-            <button id="retry-btn" class="btn-primary">I've installed it, retry</button>
+            <button id="retry-btn" class="btn-primary">retry</button>
           </div>
         </div>
       </div>
@@ -59,8 +61,8 @@
       <!-- Installing ffmpeg modal -->
       <div id="installing-modal" class="modal hidden">
         <div class="modal-content">
-          <h2>Installing ffmpeg...</h2>
-          <p id="install-status">Downloading ffmpeg, please wait...</p>
+          <h2>installing ffmpeg...</h2>
+          <p id="install-status">downloading, please wait</p>
           <div class="progress-container">
             <div id="install-progress-bar" class="progress-bar indeterminate"></div>
           </div>

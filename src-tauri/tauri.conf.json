@@ -10,12 +10,12 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "MKV to MP4 Converter",
-        "width": 500,
-        "height": 450,
+        "title": "mkv2mp4",
+        "width": 420,
+        "height": 480,
         "resizable": true,
-        "minWidth": 400,
-        "minHeight": 350,
+        "minWidth": 360,
+        "minHeight": 400,
         "center": true,
         "dragDropEnabled": true
       }
