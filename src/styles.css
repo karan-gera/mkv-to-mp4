@@ -309,6 +309,25 @@ body, html {
   display: none !important;
 }
 
+/* Footer */
+.footer {
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  padding: 8px 0 4px 0;
+}
+
+/* Clickable output */
+.output-link {
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.output-link:hover {
+  text-decoration: underline;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

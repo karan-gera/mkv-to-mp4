@@ -2,6 +2,15 @@ const { invoke } = window.__TAURI__.core;
 const { open } = window.__TAURI__.dialog;
 const { listen } = window.__TAURI__.event;
 
+// Make reveal function available globally for onclick
+window.revealFile = async function(path) {
+  try {
+    await invoke("reveal_file", { path });
+  } catch (err) {
+    console.error("Failed to reveal file:", err);
+  }
+};
+
 // DOM Elements
 let dropZone;
 let browseBtn;
@@ -185,6 +194,7 @@ async function handleFiles(filePaths) {
     try {
       const outputPath = await invoke("convert_file", { inputPath: item.path });
       item.status = 'done';
+      item.outputPath = outputPath;
       item.output = outputPath.split(/[/\\]/).pop();
       completedCount++;
     } catch (err) {
@@ -237,7 +247,9 @@ function updateStatusUI() {
         stateText = 'converting...';
         break;
       case 'done':
-        stateText = '→ ' + item.output;
+        // Make output clickable - escape quotes in path for onclick
+        const escapedPath = item.outputPath.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        stateText = `→ <span class="output-link" onclick="revealFile('${escapedPath}')">${item.output}</span>`;
         stateClass = 'done';
         break;
       case 'error':
