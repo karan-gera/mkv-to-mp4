@@ -1,23 +1,94 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-/// Check if ffmpeg is available in the system PATH
+/// Common ffmpeg locations to check on macOS
+#[cfg(target_os = "macos")]
+const FFMPEG_PATHS: &[&str] = &[
+    "/opt/homebrew/bin/ffmpeg",      // Homebrew on Apple Silicon
+    "/usr/local/bin/ffmpeg",          // Homebrew on Intel / manual install
+    "/usr/bin/ffmpeg",                // System install
+];
+
+/// Common ffmpeg locations to check on Windows
+#[cfg(target_os = "windows")]
+const FFMPEG_PATHS: &[&str] = &[
+    "ffmpeg",  // In PATH
+    "C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe",
+    "C:\\ffmpeg\\bin\\ffmpeg.exe",
+];
+
+/// Common ffmpeg locations to check on Linux
+#[cfg(target_os = "linux")]
+const FFMPEG_PATHS: &[&str] = &[
+    "/usr/bin/ffmpeg",
+    "/usr/local/bin/ffmpeg",
+    "/snap/bin/ffmpeg",
+];
+
+/// Find ffmpeg binary path
+fn find_ffmpeg() -> Option<String> {
+    // First check common locations
+    for path in FFMPEG_PATHS {
+        let path_buf = PathBuf::from(path);
+        if path_buf.exists() || path == &"ffmpeg" {
+            // Verify it actually works
+            #[cfg(target_os = "windows")]
+            let result = Command::new("cmd")
+                .args(["/C", path, "-version"])
+                .output();
+
+            #[cfg(not(target_os = "windows"))]
+            let result = Command::new(path)
+                .arg("-version")
+                .output();
+
+            if let Ok(output) = result {
+                if output.status.success() {
+                    return Some(path.to_string());
+                }
+            }
+        }
+    }
+
+    // Check user's local bin (for our downloaded binary)
+    if let Some(home) = dirs::home_dir() {
+        #[cfg(target_os = "macos")]
+        let local_ffmpeg = home.join(".local/bin/ffmpeg");
+        
+        #[cfg(target_os = "windows")]
+        let local_ffmpeg = home.join("AppData\\Local\\ffmpeg\\ffmpeg.exe");
+        
+        #[cfg(target_os = "linux")]
+        let local_ffmpeg = home.join(".local/bin/ffmpeg");
+
+        if local_ffmpeg.exists() {
+            let path_str = local_ffmpeg.to_string_lossy().to_string();
+            
+            #[cfg(target_os = "windows")]
+            let result = Command::new("cmd")
+                .args(["/C", &path_str, "-version"])
+                .output();
+
+            #[cfg(not(target_os = "windows"))]
+            let result = Command::new(&path_str)
+                .arg("-version")
+                .output();
+
+            if let Ok(output) = result {
+                if output.status.success() {
+                    return Some(path_str);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Check if ffmpeg is available
 #[tauri::command]
 fn check_ffmpeg() -> bool {
-    #[cfg(target_os = "windows")]
-    let result = Command::new("cmd")
-        .args(["/C", "ffmpeg", "-version"])
-        .output();
-
-    #[cfg(not(target_os = "windows"))]
-    let result = Command::new("ffmpeg")
-        .arg("-version")
-        .output();
-
-    match result {
-        Ok(output) => output.status.success(),
-        Err(_) => false,
-    }
+    find_ffmpeg().is_some()
 }
 
 /// Generate a unique output path that doesn't overwrite existing files
@@ -41,17 +112,19 @@ fn get_unique_output_path(input_path: &str) -> PathBuf {
 /// Convert a video file to MP4 using ffmpeg
 #[tauri::command]
 fn convert_file(input_path: String) -> Result<String, String> {
+    let ffmpeg_path = find_ffmpeg().ok_or("ffmpeg not found")?;
+    
     let output_path = get_unique_output_path(&input_path);
     let output_str = output_path.to_string_lossy().to_string();
 
     #[cfg(target_os = "windows")]
     let result = Command::new("cmd")
-        .args(["/C", "ffmpeg", "-i", &input_path, "-codec", "copy", &output_str])
+        .args(["/C", &ffmpeg_path, "-i", &input_path, "-codec", "copy", "-y", &output_str])
         .output();
 
     #[cfg(not(target_os = "windows"))]
-    let result = Command::new("ffmpeg")
-        .args(["-i", &input_path, "-codec", "copy", &output_str])
+    let result = Command::new(&ffmpeg_path)
+        .args(["-i", &input_path, "-codec", "copy", "-y", &output_str])
         .output();
 
     match result {
@@ -73,24 +146,27 @@ async fn install_ffmpeg() -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         // Check if Homebrew is available
-        let brew_check = Command::new("which")
-            .arg("brew")
-            .output();
+        let brew_paths = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"];
+        let mut brew_path: Option<&str> = None;
+        
+        for path in brew_paths {
+            if PathBuf::from(path).exists() {
+                brew_path = Some(path);
+                break;
+            }
+        }
 
-        if let Ok(output) = brew_check {
-            if output.status.success() {
-                // Use Homebrew to install ffmpeg
-                let result = Command::new("brew")
-                    .args(["install", "ffmpeg"])
-                    .output()
-                    .map_err(|e| format!("Failed to run brew: {}", e))?;
+        if let Some(brew) = brew_path {
+            let result = Command::new(brew)
+                .args(["install", "ffmpeg"])
+                .output()
+                .map_err(|e| format!("Failed to run brew: {}", e))?;
 
-                if result.status.success() {
-                    return Ok(());
-                } else {
-                    let stderr = String::from_utf8_lossy(&result.stderr);
-                    return Err(format!("Homebrew install failed: {}", stderr));
-                }
+            if result.status.success() {
+                return Ok(());
+            } else {
+                let stderr = String::from_utf8_lossy(&result.stderr);
+                return Err(format!("Homebrew install failed: {}", stderr));
             }
         }
 
@@ -108,7 +184,7 @@ async fn install_ffmpeg() -> Result<(), String> {
         if let Ok(output) = winget_check {
             if output.status.success() {
                 let result = Command::new("cmd")
-                    .args(["/C", "winget", "install", "Gyan.FFmpeg", "-e", "--silent"])
+                    .args(["/C", "winget", "install", "Gyan.FFmpeg", "-e", "--silent", "--accept-package-agreements", "--accept-source-agreements"])
                     .output()
                     .map_err(|e| format!("Failed to run winget: {}", e))?;
 
@@ -125,22 +201,11 @@ async fn install_ffmpeg() -> Result<(), String> {
     #[cfg(target_os = "linux")]
     {
         // Try apt-get first (Debian/Ubuntu)
-        let apt_result = Command::new("sudo")
+        let apt_result = Command::new("pkexec")
             .args(["apt-get", "install", "-y", "ffmpeg"])
             .output();
 
         if let Ok(output) = apt_result {
-            if output.status.success() {
-                return Ok(());
-            }
-        }
-
-        // Try dnf (Fedora)
-        let dnf_result = Command::new("sudo")
-            .args(["dnf", "install", "-y", "ffmpeg"])
-            .output();
-
-        if let Ok(output) = dnf_result {
             if output.status.success() {
                 return Ok(());
             }
@@ -243,9 +308,6 @@ async fn download_ffmpeg_binary() -> Result<(), String> {
 
     // Clean up temp file
     let _ = fs::remove_file(temp_zip);
-
-    // Add to PATH message (user needs to add manually or we use full path)
-    // For simplicity, we'll update our convert command to check this location too
 
     Ok(())
 }
