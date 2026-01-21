@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "tauri-app",
+  "productName": "MKV to MP4",
   "version": "0.1.0",
-  "identifier": "com.curro.tauri-app",
+  "identifier": "com.mkv-to-mp4.app",
   "build": {
     "frontendDist": "../src"
   },
@@ -10,9 +10,14 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "tauri-app",
-        "width": 800,
-        "height": 600
+        "title": "MKV to MP4 Converter",
+        "width": 500,
+        "height": 450,
+        "resizable": true,
+        "minWidth": 400,
+        "minHeight": 350,
+        "center": true,
+        "dragDropEnabled": true
       }
     ],
     "security": {

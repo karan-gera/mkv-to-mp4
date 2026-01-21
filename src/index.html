@@ -4,36 +4,68 @@
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri App</title>
+    <title>MKV to MP4 Converter</title>
     <script type="module" src="/main.js" defer></script>
   </head>
 
   <body>
     <main class="container">
-      <h1>Welcome to Tauri</h1>
-
-      <div class="row">
-        <a href="https://tauri.app" target="_blank">
-          <img src="/assets/tauri.svg" class="logo tauri" alt="Tauri logo" />
-        </a>
-        <a
-          href="https://developer.mozilla.org/en-US/docs/Web/JavaScript"
-          target="_blank"
-        >
-          <img
-            src="/assets/javascript.svg"
-            class="logo vanilla"
-            alt="JavaScript logo"
-          />
-        </a>
+      <!-- Main drop zone -->
+      <div id="drop-zone" class="drop-zone">
+        <div class="drop-zone-content">
+          <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <p class="drop-text">Drop video file here</p>
+          <p class="drop-subtext">or</p>
+          <button id="browse-btn" class="browse-btn">Browse Files</button>
+          <p class="supported-formats">Supports MKV, AVI, MOV, and other formats</p>
+        </div>
       </div>
-      <p>Click on the Tauri logo to learn more about the framework</p>
 
-      <form class="row" id="greet-form">
-        <input id="greet-input" placeholder="Enter a name..." />
-        <button type="submit">Greet</button>
-      </form>
-      <p id="greet-msg"></p>
+      <!-- Status area -->
+      <div id="status-area" class="status-area hidden">
+        <div id="status-content">
+          <p id="status-text" class="status-text"></p>
+          <div id="progress-container" class="progress-container hidden">
+            <div id="progress-bar" class="progress-bar"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ffmpeg missing modal -->
+      <div id="ffmpeg-modal" class="modal hidden">
+        <div class="modal-content">
+          <h2>Missing Dependency</h2>
+          <p>Hey! You're missing <strong>ffmpeg</strong>, which is needed for this app to work.</p>
+          <p class="modal-subtext">ffmpeg is a free tool that handles video conversion. Don't worry, we can help!</p>
+          <div class="modal-buttons">
+            <button id="install-ffmpeg-btn" class="btn-primary">Install it for me</button>
+            <button id="manual-install-btn" class="btn-secondary">I'll do it myself</button>
+          </div>
+          <div id="manual-instructions" class="manual-instructions hidden">
+            <p><strong>Manual installation:</strong></p>
+            <ul>
+              <li><strong>Mac:</strong> Open Terminal and run: <code>brew install ffmpeg</code></li>
+              <li><strong>Windows:</strong> Download from <a href="https://ffmpeg.org/download.html" target="_blank">ffmpeg.org</a></li>
+            </ul>
+            <button id="retry-btn" class="btn-primary">I've installed it, retry</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Installing ffmpeg modal -->
+      <div id="installing-modal" class="modal hidden">
+        <div class="modal-content">
+          <h2>Installing ffmpeg...</h2>
+          <p id="install-status">Downloading ffmpeg, please wait...</p>
+          <div class="progress-container">
+            <div id="install-progress-bar" class="progress-bar indeterminate"></div>
+          </div>
+        </div>
+      </div>
     </main>
   </body>
 </html>
