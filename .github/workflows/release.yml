@@ -1,0 +1,73 @@
+# Publishes installers to GitHub Releases for https://github.com/karan-gera/mkv-to-mp4
+#
+# How to ship a version:
+# 1. Set the same version in package.json and src-tauri/tauri.conf.json (e.g. 0.1.0).
+# 2. Commit and push to main.
+# 3. Tag and push: git tag v0.1.0 && git push origin v0.1.0
+#    (the tag must be v<version> matching tauri.conf.json — the workflow uses v__VERSION__.)
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target aarch64-apple-darwin
+            name: macOS-arm64
+          - platform: macos-latest
+            args: --target x86_64-apple-darwin
+            name: macOS-x64
+          - platform: windows-latest
+            args: ''
+            name: Windows
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build and attach to GitHub Release
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          owner: karan-gera
+          repo: mkv-to-mp4
+          tagName: v__VERSION__
+          releaseName: 'MKV to MP4 v__VERSION__'
+          generateReleaseNotes: true
+          releaseBody: |
+            Installers for macOS (Apple Silicon, Intel) and Windows are attached below.
+          prerelease: false
+          releaseDraft: false
+          args: ${{ matrix.args }}
